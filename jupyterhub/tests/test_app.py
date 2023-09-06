@@ -260,8 +260,7 @@ async def test_resume_spawners(tmpdir, request):
         p = patch.dict(
             os.environ,
             {
-                'JUPYTERHUB_TEST_DB_URL': 'sqlite:///%s'
-                % tmpdir.join('jupyterhub.sqlite')
+                'JUPYTERHUB_TEST_DB_URL': f"sqlite:///{tmpdir.join('jupyterhub.sqlite')}"
             },
         )
         p.start()
@@ -316,7 +315,7 @@ async def test_resume_spawners(tmpdir, request):
     user = app.users[name]
     assert not user.running
     assert user.spawner.server is None
-    assert list(db.query(orm.Server)) == []
+    assert not list(db.query(orm.Server))
 
 
 @pytest.mark.parametrize(

@@ -90,14 +90,13 @@ def lru_cache_key(key_func, maxsize=1024):
             if cache_key in cache:
                 # cache hit
                 return cache[cache_key]
+            # cache miss, call function and cache result
+            result = func(*args, **kwargs)
+            if isinstance(result, DoNotCache):
+                # DoNotCache prevents caching
+                result = result.result
             else:
-                # cache miss, call function and cache result
-                result = func(*args, **kwargs)
-                if isinstance(result, DoNotCache):
-                    # DoNotCache prevents caching
-                    result = result.result
-                else:
-                    cache[cache_key] = result
+                cache[cache_key] = result
             return result
 
         return cached

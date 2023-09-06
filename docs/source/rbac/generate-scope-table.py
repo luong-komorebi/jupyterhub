@@ -54,8 +54,7 @@ class ScopeTableGenerator:
         for scope, data in self.scopes.items():
             subscopes = data.get('subscopes')
             if subscopes is not None:
-                for subscope in subscopes:
-                    pairs.append((scope, subscope))
+                pairs.extend((scope, subscope) for subscope in subscopes)
             else:
                 pairs.append((scope, None))
         subscopes = [pair[1] for pair in pairs]
@@ -67,11 +66,7 @@ class ScopeTableGenerator:
     def _get_top_scopes(self, subscopes):
         """Returns a list of highest level scopes
         (not a subscope of any other scopes)"""
-        top_scopes = []
-        for scope in self.scopes.keys():
-            if scope not in subscopes:
-                top_scopes.append(scope)
-        return top_scopes
+        return [scope for scope in self.scopes.keys() if scope not in subscopes]
 
     def _parse_scopes(self):
         """Returns a list of table rows where row:
@@ -133,8 +128,7 @@ class ScopeTableGenerator:
         content["info"]["version"] = __version__
         for scope in self.scopes:
             description = self.scopes[scope]['description']
-            doc_description = self.scopes[scope].get('doc_description', '')
-            if doc_description:
+            if doc_description := self.scopes[scope].get('doc_description', ''):
                 description = doc_description
             scope_dict[scope] = description
         content['components']['securitySchemes']['oauth2']['flows'][

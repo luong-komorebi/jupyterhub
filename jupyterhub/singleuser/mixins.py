@@ -51,10 +51,7 @@ def _bool_env(key):
 
     0, empty, or unset is False; All other values are True.
     """
-    if os.environ.get(key, "") in {"", "0"}:
-        return False
-    else:
-        return True
+    return os.environ.get(key, "") not in {"", "0"}
 
 
 # Authenticate requests with the Hub
@@ -79,9 +76,7 @@ class HubAuthenticatedHandler(HubOAuthenticated):
 
     @property
     def hub_groups(self):
-        if self.settings['group']:
-            return {self.settings['group']}
-        return set()
+        return {self.settings['group']} if self.settings['group'] else set()
 
 
 class JupyterHubLoginHandlerMixin:
@@ -307,7 +302,7 @@ class SingleUserNotebookAppMixin(Configurable):
     @default('hub_prefix')
     def _hub_prefix_default(self):
         base_url = os.environ.get('JUPYTERHUB_BASE_URL') or '/'
-        return base_url + 'hub/'
+        return f'{base_url}hub/'
 
     hub_api_url = Unicode().tag(config=True)
 
@@ -326,9 +321,9 @@ class SingleUserNotebookAppMixin(Configurable):
         """ensure base_url starts and ends with /"""
         value = proposal.value
         if not value.startswith('/'):
-            value = '/' + value
+            value = f'/{value}'
         if not value.endswith('/'):
-            value = value + '/'
+            value = f'{value}/'
         return value
 
     @default('port')
@@ -407,10 +402,7 @@ class SingleUserNotebookAppMixin(Configurable):
 
     @default('log_level')
     def _log_level_default(self):
-        if _bool_env("JUPYTERHUB_DEBUG"):
-            return logging.DEBUG
-        else:
-            return logging.INFO
+        return logging.DEBUG if _bool_env("JUPYTERHUB_DEBUG") else logging.INFO
 
     @default('log_datefmt')
     def _log_datefmt_default(self):
@@ -521,8 +513,7 @@ class SingleUserNotebookAppMixin(Configurable):
 
     @default('hub_activity_interval')
     def _default_activity_interval(self):
-        env_value = os.environ.get('JUPYTERHUB_ACTIVITY_INTERVAL')
-        if env_value:
+        if env_value := os.environ.get('JUPYTERHUB_ACTIVITY_INTERVAL'):
             return int(env_value)
         else:
             return 300
@@ -628,11 +619,7 @@ class SingleUserNotebookAppMixin(Configurable):
         # disable trash by default
         # this can be re-enabled by config
         self.config.FileContentsManager.delete_to_trash = False
-        # load default-url env at higher priority than `@default`,
-        # which may have their own _defaults_ which should not override explicit default_url config
-        # via e.g. c.Spawner.default_url. Seen in jupyterlab's SingleUserLabApp.
-        default_url = os.environ.get("JUPYTERHUB_DEFAULT_URL")
-        if default_url:
+        if default_url := os.environ.get("JUPYTERHUB_DEFAULT_URL"):
             self.config[self.__class__.__name__].default_url = default_url
         self._log_app_versions()
         # call our init_ioloop very early
@@ -718,7 +705,7 @@ class SingleUserNotebookAppMixin(Configurable):
         # set CSP header directly to workaround bugs in jupyter/notebook 5.0
         headers.setdefault(
             'Content-Security-Policy',
-            ';'.join(["frame-ancestors 'self'", "report-uri " + csp_report_uri]),
+            ';'.join(["frame-ancestors 'self'", f"report-uri {csp_report_uri}"]),
         )
         super().init_webapp()
 
@@ -939,7 +926,6 @@ def make_singleuser_app(App):
     LogoutHandler = empty_parent_app.logout_handler_class
     BaseHandler = _patch_app_base_handlers(empty_parent_app)
 
-    # create Handler classes from mixins + bases
     class JupyterHubLoginHandler(JupyterHubLoginHandlerMixin, LoginHandler):
         pass
 
@@ -951,13 +937,12 @@ def make_singleuser_app(App):
 
     # create merged aliases & flags
     merged_aliases = {}
-    merged_aliases.update(empty_parent_app.aliases or {})
+    merged_aliases |= (empty_parent_app.aliases or {})
     merged_aliases.update(aliases)
 
     merged_flags = {}
-    merged_flags.update(empty_parent_app.flags or {})
+    merged_flags |= (empty_parent_app.flags or {})
     merged_flags.update(flags)
-    # create mixed-in App class, bringing it all together
     class SingleUserNotebookApp(SingleUserNotebookAppMixin, App):
         aliases = merged_aliases
         flags = merged_flags

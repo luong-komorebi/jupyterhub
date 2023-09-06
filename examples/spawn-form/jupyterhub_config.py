@@ -33,8 +33,7 @@ class DemoFormSpawner(LocalProcessSpawner):
                 key, value = line.split('=', 1)
                 env[key.strip()] = value.strip()
 
-        arg_s = formdata.get('args', [''])[0].strip()
-        if arg_s:
+        if arg_s := formdata.get('args', [''])[0].strip():
             options['argv'] = shlex.split(arg_s)
         return options
 

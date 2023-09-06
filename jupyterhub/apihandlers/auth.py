@@ -26,8 +26,7 @@ class TokenAPIHandler(APIHandler):
         if orm_token is None:
             raise web.HTTPError(404)
 
-        owner = orm_token.user or orm_token.service
-        if owner:
+        if owner := orm_token.user or orm_token.service:
             # having a token means we should be able to read the owner's model
             # (this is the only thing this handler is for)
             self.expanded_scopes |= scopes.identify_scopes(owner)
@@ -41,7 +40,7 @@ class TokenAPIHandler(APIHandler):
         elif orm_token.service:
             model = self.service_model(orm_token.service)
         else:
-            self.log.warning("%s has no user or service. Deleting..." % orm_token)
+            self.log.warning(f"{orm_token} has no user or service. Deleting...")
             self.db.delete(orm_token)
             self.db.commit()
             raise web.HTTPError(404)
@@ -127,11 +126,7 @@ class OAuthHandler:
 
         Adds user, session_id, client to oauth credentials
         """
-        if credentials is None:
-            credentials = {}
-        else:
-            credentials = credentials.copy()
-
+        credentials = {} if credentials is None else credentials.copy()
         session_id = self.get_session_cookie()
         if session_id is None:
             session_id = self.set_session_cookie()

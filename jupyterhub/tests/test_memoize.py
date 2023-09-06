@@ -54,9 +54,7 @@ def test_do_not_cache():
     def is_even(arg):
         nonlocal call_count
         call_count += 1
-        if arg % 2:
-            return DoNotCache(False)
-        return True
+        return DoNotCache(False) if arg % 2 else True
 
     before = call_count
     assert is_even(0) == True

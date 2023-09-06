@@ -103,15 +103,8 @@ class Spawner(LoggingConfigurable):
 
         Used in logging for consistency with named servers.
         """
-        if self.user:
-            user_name = self.user.name
-        else:
-            # no user, only happens in mock tests
-            user_name = "(no user)"
-        if self.name:
-            return f"{user_name}:{self.name}"
-        else:
-            return user_name
+        user_name = self.user.name if self.user else "(no user)"
+        return f"{user_name}:{self.name}" if self.name else user_name
 
     @property
     def _failed(self):
@@ -143,11 +136,7 @@ class Spawner(LoggingConfigurable):
 
         A server is not ready if an event is pending.
         """
-        if self.pending:
-            return False
-        if self.server is None:
-            return False
-        return True
+        return False if self.pending else self.server is not None
 
     @property
     def active(self):
@@ -194,17 +183,13 @@ class Spawner(LoggingConfigurable):
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__()
 
-        missing = []
-        for attr in ('start', 'stop', 'poll'):
-            if getattr(Spawner, attr) is getattr(cls, attr):
-                missing.append(attr)
-
-        if missing:
+        if missing := [
+            attr
+            for attr in ('start', 'stop', 'poll')
+            if getattr(Spawner, attr) is getattr(cls, attr)
+        ]:
             raise NotImplementedError(
-                "class `{}` needs to redefine the `start`,"
-                "`stop` and `poll` methods. `{}` not redefined.".format(
-                    cls.__name__, '`, `'.join(missing)
-                )
+                f"class `{cls.__name__}` needs to redefine the `start`,`stop` and `poll` methods. `{'`, `'.join(missing)}` not redefined."
             )
 
     proxy_spec = Unicode()
@@ -262,9 +247,7 @@ class Spawner(LoggingConfigurable):
 
     @property
     def name(self):
-        if self.orm_spawner:
-            return self.orm_spawner.name
-        return ''
+        return self.orm_spawner.name if self.orm_spawner else ''
 
     internal_ssl = Bool(False)
     internal_trust_bundles = Dict()
@@ -911,8 +894,7 @@ class Spawner(LoggingConfigurable):
         state: dict
             a JSONable dict of state
         """
-        state = {}
-        return state
+        return {}
 
     def clear_state(self):
         """Clear any state that should be cleared when the single-user server stops.
@@ -937,9 +919,9 @@ class Spawner(LoggingConfigurable):
         env = {}
         if self.env:
             warnings.warn(
-                "Spawner.env is deprecated, found %s" % self.env, DeprecationWarning
+                f"Spawner.env is deprecated, found {self.env}", DeprecationWarning
             )
-            env.update(self.env)
+            env |= self.env
 
         for key in self.env_keep:
             if key in os.environ:
@@ -1037,10 +1019,7 @@ class Spawner(LoggingConfigurable):
         # Called last to ensure highest priority, in case of overriding other
         # 'default' variables like the API url
         for key, value in self.environment.items():
-            if callable(value):
-                env[key] = value(self)
-            else:
-                env[key] = value
+            env[key] = value(self) if callable(value) else value
         return env
 
     async def get_url(self):
@@ -1164,17 +1143,16 @@ class Spawner(LoggingConfigurable):
         certipy = Certipy(store_dir=self.internal_certs_location)
         notebook_component = 'notebooks-ca'
         notebook_key_pair = certipy.create_signed_pair(
-            'user-' + common_name,
+            f'user-{common_name}',
             notebook_component,
             alt_names=alt_names,
             overwrite=True,
         )
-        paths = {
+        return {
             "keyfile": notebook_key_pair['files']['key'],
             "certfile": notebook_key_pair['files']['cert'],
             "cafile": self.internal_trust_bundles[notebook_component],
         }
-        return paths
 
     async def move_certs(self, paths):
         """Takes certificate paths and makes them available to the notebook server
@@ -1423,11 +1401,11 @@ def _try_setcwd(path):
             os.chdir(path)
         except OSError as e:
             exc = e  # break exception instance out of except scope
-            print(f"Couldn't set CWD to {path} ({e})", file=sys.stderr)
+            print(f"Couldn't set CWD to {path} ({exc})", file=sys.stderr)
             path, _ = os.path.split(path)
         else:
             return
-    print("Couldn't set CWD at all (%s), using temp dir" % exc, file=sys.stderr)
+    print(f"Couldn't set CWD at all ({exc}), using temp dir", file=sys.stderr)
     td = mkdtemp()
     os.chdir(td)
 
@@ -1458,7 +1436,7 @@ def set_user_setuid(username, chdir=True):
         try:
             os.setgroups(gids)
         except Exception as e:
-            print('Failed to set groups %s' % e, file=sys.stderr)
+            print(f'Failed to set groups {e}', file=sys.stderr)
         os.setuid(uid)
 
         # start in the user's home dir
@@ -1675,7 +1653,7 @@ class LocalProcessSpawner(Spawner):
             preexec_fn=self.make_preexec_fn(self.user.name),
             start_new_session=True,  # don't forward signals
         )
-        popen_kwargs.update(self.popen_kwargs)
+        popen_kwargs |= self.popen_kwargs
         # don't let user config override env
         popen_kwargs['env'] = env
         try:
@@ -1723,11 +1701,10 @@ class LocalProcessSpawner(Spawner):
             alive = psutil.pid_exists(self.pid)
         else:
             alive = await self._signal(0)
-        if not alive:
-            self.clear_state()
-            return 0
-        else:
+        if alive:
             return None
+        self.clear_state()
+        return 0
 
     async def _signal(self, sig):
         """Send given signal to a single-user server's process.

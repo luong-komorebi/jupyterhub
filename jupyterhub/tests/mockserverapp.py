@@ -14,4 +14,4 @@ class MockServerApp(ServerApp):
     def initialize(self, argv=None):
         self.default_url = "/tree"
         super().initialize(argv)
-        self.web_app.add_handlers(".*$", [(self.base_url + "tree/?", TreeHandler)])
+        self.web_app.add_handlers(".*$", [(f"{self.base_url}tree/?", TreeHandler)])

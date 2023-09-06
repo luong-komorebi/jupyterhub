@@ -33,7 +33,7 @@ class CryptographyUnavailable(EncryptionUnavailable):
 
 class NoEncryptionKeys(EncryptionUnavailable):
     def __str__(self):
-        return "Encryption keys must be specified in %s env" % KEY_ENV
+        return f"Encryption keys must be specified in {KEY_ENV} env"
 
 
 def _validate_key(key):
@@ -89,10 +89,7 @@ class CryptKeeper(SingletonConfigurable):
         # load application config by default
         from .app import JupyterHub
 
-        if JupyterHub.initialized():
-            return JupyterHub.instance().config
-        else:
-            return Config()
+        return JupyterHub.instance().config if JupyterHub.initialized() else Config()
 
     executor = Any()
 

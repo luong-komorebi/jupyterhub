@@ -66,11 +66,11 @@ def _check_version(hub_version, singleuser_version, log):
                 _version_mismatch_warning_logged[key] = True
         if do_log:
             log_method(
-                "jupyterhub version %s != jupyterhub-singleuser version %s." + extra,
+                f"jupyterhub version %s != jupyterhub-singleuser version %s.{extra}",
                 hub_version,
                 singleuser_version,
             )
     else:
         log.debug(
-            "jupyterhub and jupyterhub-singleuser both on version %s" % hub_version
+            f"jupyterhub and jupyterhub-singleuser both on version {hub_version}"
         )

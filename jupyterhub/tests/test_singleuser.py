@@ -206,11 +206,7 @@ def test_singleuser_app_class(JUPYTERHUB_SINGLEUSER_APP):
         # not specified, will try both
         expect_error = not (have_server or have_notebook)
 
-    if expect_error:
-        ctx = pytest.raises(CalledProcessError)
-    else:
-        ctx = nullcontext()
-
+    ctx = pytest.raises(CalledProcessError) if expect_error else nullcontext()
     with mock.patch.dict(
         os.environ,
         {

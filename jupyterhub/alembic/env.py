@@ -66,7 +66,7 @@ def run_migrations_offline():
     """
     connectable = config.attributes.get('connection', None)
     config_opts = {}
-    config_opts.update(common_config_opts)
+    config_opts |= common_config_opts
     config_opts["literal_binds"] = True
 
     if connectable is None:
@@ -88,7 +88,7 @@ def run_migrations_online():
     """
     connectable = config.attributes.get('connection', None)
     config_opts = {}
-    config_opts.update(common_config_opts)
+    config_opts |= common_config_opts
 
     if connectable is None:
         connectable = engine_from_config(

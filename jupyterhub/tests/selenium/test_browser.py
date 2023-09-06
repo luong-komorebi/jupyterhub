@@ -112,8 +112,6 @@ async def test_submit_login_form(app, browser):
     # verify url contains username
     if f"/user/{user}/" not in browser.current_url:
         await webdriver_wait(browser, EC.url_to_be(redirected_url))
-    else:
-        pass
     assert browser.current_url == redirected_url
 
 

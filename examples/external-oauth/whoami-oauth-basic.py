@@ -39,8 +39,7 @@ class JupyterHubLoginHandler(web.RequestHandler):
         return data['access_token']
 
     async def get(self):
-        code = self.get_argument('code', None)
-        if code:
+        if code := self.get_argument('code', None):
             # code is set, we are the oauth callback
             # complete oauth
             token = await self.token_for_code(code)
@@ -73,9 +72,7 @@ class WhoAmIHandler(web.RequestHandler):
         If a Falsy value is returned, the request is redirected to `login_url`.
         If a Truthy value is returned, the request is allowed to proceed.
         """
-        token = self.get_secure_cookie('whoami-oauth-token')
-
-        if token:
+        if token := self.get_secure_cookie('whoami-oauth-token'):
             # secure cookies are bytes, decode to str
             return token.decode('ascii', 'replace')
 
@@ -101,9 +98,9 @@ def main():
 
     # construct OAuth URLs from jupyterhub base URL
     hub_api = os.environ['JUPYTERHUB_URL'].rstrip('/') + '/hub/api'
-    authorize_url = hub_api + '/oauth2/authorize'
-    token_url = hub_api + '/oauth2/token'
-    user_url = hub_api + '/user'
+    authorize_url = f'{hub_api}/oauth2/authorize'
+    token_url = f'{hub_api}/oauth2/token'
+    user_url = f'{hub_api}/user'
 
     app = web.Application(
         [('/oauth_callback', JupyterHubLoginHandler), ('/', WhoAmIHandler)],

@@ -59,7 +59,7 @@ async def test_auth_api(app):
         app,
         'authorizations/token',
         api_token,
-        headers={'Authorization': 'token: %s' % user.cookie_id},
+        headers={'Authorization': f'token: {user.cookie_id}'},
     )
     assert r.status_code == 403
 
@@ -255,7 +255,7 @@ def fill_user(model):
     return model
 
 
-TIMESTAMP = normalize_timestamp(datetime.now().isoformat() + 'Z')
+TIMESTAMP = normalize_timestamp(f'{datetime.now().isoformat()}Z')
 
 
 @mark.user
@@ -363,7 +363,7 @@ async def test_get_users_pagination(
     existing_users = db.query(orm.User).order_by(orm.User.id.asc())
     usernames.extend(u.name for u in existing_users)
 
-    for i in range(n - existing_users.count()):
+    for _ in range(n - existing_users.count()):
         name = new_username()
         usernames.append(name)
         add_user(db, app, name=name)
@@ -527,11 +527,7 @@ async def test_get_self(app):
     )
     db.add(oauth_token)
     db.commit()
-    r = await api_request(
-        app,
-        'user',
-        headers={'Authorization': 'token ' + token},
-    )
+    r = await api_request(app, 'user', headers={'Authorization': f'token {token}'})
     r.raise_for_status()
     model = r.json()
     assert model['name'] == u.name
@@ -874,7 +870,7 @@ async def test_spawn(app):
     status = await app_user.spawner.poll()
     assert status is None
 
-    assert spawner.server.base_url == ujoin(app.base_url, 'user/%s' % name) + '/'
+    assert spawner.server.base_url == f"{ujoin(app.base_url, f'user/{name}')}/"
     url = public_url(app, user)
     kwargs = {}
     if app.internal_ssl:
@@ -914,7 +910,7 @@ async def test_spawn(app):
     after_servers = sorted(db.query(orm.Server), key=lambda s: s.url)
     assert before_servers == after_servers
     tokens = list(db.query(orm.APIToken).filter(orm.APIToken.user_id == user.id))
-    assert tokens == []
+    assert not tokens
     assert app.users.count_active_users()['pending'] == 0
 
 
@@ -1235,7 +1231,7 @@ async def test_progress_bad_slow(request, app, no_patience, slow_bad_spawn):
 async def progress_forever():
     """progress function that yields messages forever"""
     for i in range(1, 10):
-        yield {'progress': i, 'message': 'Stage %s' % i}
+        yield {'progress': i, 'message': f'Stage {i}'}
         # wait a long time before the next event
         await asyncio.sleep(10)
 
@@ -1505,10 +1501,7 @@ async def test_get_new_token(app, headers, status, note, expires_in):
         options['note'] = note
     if expires_in:
         options['expires_in'] = expires_in
-    if options:
-        body = json.dumps(options)
-    else:
-        body = ''
+    body = json.dumps(options) if options else ''
     # request a new token
     r = await api_request(
         app, 'users/admin/tokens', method='post', headers=headers, data=body
@@ -1564,7 +1557,7 @@ async def test_token_for_user(app, as_user, for_user, status):
     if for_user != 'missing':
         for_user_obj = add_user(app.db, app, name=for_user)
     data = {'username': for_user}
-    headers = {'Authorization': 'token %s' % u.new_api_token()}
+    headers = {'Authorization': f'token {u.new_api_token()}'}
     r = await api_request(
         app,
         'users',
@@ -1588,7 +1581,7 @@ async def test_token_for_user(app, as_user, for_user, status):
     if for_user == as_user:
         note = 'Requested via api'
     else:
-        note = 'Requested via api by user %s' % as_user
+        note = f'Requested via api by user {as_user}'
     assert reply['note'] == note
 
     # delete the token
@@ -1659,7 +1652,7 @@ async def test_token_list(app, as_user, for_user, status):
     u = add_user(app.db, app, name=as_user)
     if for_user != 'missing':
         for_user_obj = add_user(app.db, app, name=for_user)
-    headers = {'Authorization': 'token %s' % u.new_api_token()}
+    headers = {'Authorization': f'token {u.new_api_token()}'}
     r = await api_request(app, 'users', for_user, 'tokens', headers=headers)
     assert r.status_code == status
     if status != 200:
@@ -1926,7 +1919,7 @@ async def test_get_services(app, mockservice_url):
 async def test_get_service(app, mockservice_url):
     mockservice = mockservice_url
     db = app.db
-    r = await api_request(app, 'services/%s' % mockservice.name)
+    r = await api_request(app, f'services/{mockservice.name}')
     r.raise_for_status()
     assert r.status_code == 200
 
@@ -1945,12 +1938,12 @@ async def test_get_service(app, mockservice_url):
     }
     r = await api_request(
         app,
-        'services/%s' % mockservice.name,
-        headers={'Authorization': 'token %s' % mockservice.api_token},
+        f'services/{mockservice.name}',
+        headers={'Authorization': f'token {mockservice.api_token}'},
     )
     r.raise_for_status()
     r = await api_request(
-        app, 'services/%s' % mockservice.name, headers=auth_header(db, 'user')
+        app, f'services/{mockservice.name}', headers=auth_header(db, 'user')
     )
     assert r.status_code == 403
 
@@ -1958,10 +1951,11 @@ async def test_get_service(app, mockservice_url):
 async def test_root_api(app):
     base_url = app.hub.url
     url = ujoin(base_url, 'api')
-    kwargs = {}
     if app.internal_ssl:
-        kwargs['cert'] = (app.internal_ssl_cert, app.internal_ssl_key)
-        kwargs["verify"] = app.internal_ssl_ca
+        kwargs = {
+            'cert': (app.internal_ssl_cert, app.internal_ssl_key),
+            "verify": app.internal_ssl_ca,
+        }
     r = await api_request(app, bypass_proxy=True)
     r.raise_for_status()
     expected = {'version': jupyterhub.__version__}
@@ -2043,11 +2037,7 @@ async def test_update_server_activity(app, user, server_name, fresh):
     app.db.commit()
 
     td = timedelta(minutes=1)
-    if fresh:
-        activity = now + td
-    else:
-        activity = now - td
-
+    activity = now + td if fresh else now - td
     r = await api_request(
         app,
         f"users/{user.name}/activity",
@@ -2069,11 +2059,7 @@ async def test_update_server_activity(app, user, server_name, fresh):
 
     # check that last activity was updated
 
-    if fresh:
-        expected = activity.replace(tzinfo=None)
-    else:
-        expected = now.replace(tzinfo=None)
-
+    expected = activity.replace(tzinfo=None) if fresh else now.replace(tzinfo=None)
     assert user.spawners[server_name].orm_spawner.last_activity == expected
 
 

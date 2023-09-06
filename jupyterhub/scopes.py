@@ -185,10 +185,7 @@ def _intersect_expanded_scopes(scopes_a, scopes_b, db=None):
         nonlocal needs_db
         needs_db = True
         user = db.query(orm.User).filter_by(name=username).first()
-        if user is None:
-            return empty_set
-        else:
-            return {group.name for group in user.groups}
+        return empty_set if user is None else {group.name for group in user.groups}
 
     @lru_cache()
     def groups_for_server(server):
@@ -300,11 +297,7 @@ def _intersect_expanded_scopes(scopes_a, scopes_b, db=None):
                 common_filters[base]["user"] = common_users
 
     intersection = unparse_scopes(common_filters)
-    if needs_db:
-        # return intersection, but don't cache it if it needed db lookups
-        return DoNotCache(intersection)
-
-    return intersection
+    return DoNotCache(intersection) if needs_db else intersection
 
 
 def get_scopes_for(orm_object):
@@ -368,10 +361,7 @@ def get_scopes_for(orm_object):
             owner_scopes,
             db=sa.inspect(orm_object).session,
         )
-        discarded_token_scopes = token_scopes - intersection
-
-        # Not taking symmetric difference here because token owner can naturally have more scopes than token
-        if discarded_token_scopes:
+        if discarded_token_scopes := token_scopes - intersection:
             app_log.warning(
                 f"discarding scopes [{discarded_token_scopes}],"
                 f" not present in roles of owner {owner}"
@@ -486,15 +476,8 @@ def _expand_scopes_key(scopes, owner=None, oauth_client=None):
     """
     # freeze scopes for hash
     frozen_scopes = frozenset(scopes)
-    if owner is None:
-        owner_key = None
-    else:
-        # owner key is the type and name
-        owner_key = (type(owner).__name__, owner.name)
-    if oauth_client is None:
-        oauth_client_key = None
-    else:
-        oauth_client_key = oauth_client.identifier
+    owner_key = None if owner is None else (type(owner).__name__, owner.name)
+    oauth_client_key = None if oauth_client is None else oauth_client.identifier
     return (frozen_scopes, owner_key, oauth_client_key)
 
 
@@ -541,8 +524,7 @@ def expand_scopes(scopes, owner=None, oauth_client=None):
             # and !service into !service={servicename}
             # and !server into !server={username}/{servername}
             expanded_scopes.remove(scope)
-            expanded_filter = filter_replacements[filter]
-            if expanded_filter:
+            if expanded_filter := filter_replacements[filter]:
                 # translate
                 expanded_scopes.add(f'{base_scope}!{expanded_filter}')
             else:
@@ -630,9 +612,6 @@ def _resolve_requested_scopes(requested_scopes, have_scopes, user, client, db):
             # or report the exact (likely too detailed) set of not granted scopes (below)
             # disallowed_scopes.remove(scope)
             # disallowed_scopes |= expanded_disallowed.difference(allowed_intersection)
-        else:
-            # no new scopes granted, original check was right
-            pass
     return (allowed_scopes, disallowed_scopes)
 
 
@@ -642,12 +621,9 @@ def _needs_scope_expansion(filter_, filter_value, sub_scope):
     Assumptions:
     filter_ != Scope.ALL
     """
-    if not (filter_ == 'user' and 'group' in sub_scope):
+    if filter_ != 'user' or 'group' not in sub_scope:
         return False
-    if 'user' in sub_scope:
-        return filter_value not in sub_scope['user']
-    else:
-        return True
+    return filter_value not in sub_scope['user'] if 'user' in sub_scope else True
 
 
 def _check_user_in_expanded_scope(handler, user_name, scope_group_names):
@@ -669,7 +645,7 @@ def _check_scope_access(api_handler, req_scope, **kwargs):
     except AttributeError:
         api_name = type(api_handler).__name__
     if 'user' in kwargs and 'server' in kwargs:
-        kwargs['server'] = "{}/{}".format(kwargs['user'], kwargs['server'])
+        kwargs['server'] = f"{kwargs['user']}/{kwargs['server']}"
     if req_scope not in api_handler.parsed_scopes:
         app_log.debug("No access to %s via %s", api_name, req_scope)
         return False
@@ -695,7 +671,7 @@ def _check_scope_access(api_handler, req_scope, **kwargs):
                 app_log.debug("Restricted client access supported with group expansion")
                 return True
     app_log.debug(
-        "Client access refused; filters do not match API endpoint %s request" % api_name
+        f"Client access refused; filters do not match API endpoint {api_name} request"
     )
     raise web.HTTPError(404, "No access to resources or resources not found")
 
@@ -713,11 +689,7 @@ def _check_scopes_exist(scopes, who_for=None):
     filter_prefixes = ('!user=', '!service=', '!group=', '!server=')
     exact_filters = {"!user", "!service", "!server"}
 
-    if who_for:
-        log_for = f"for {who_for}"
-    else:
-        log_for = ""
-
+    log_for = f"for {who_for}" if who_for else ""
     for scope in scopes:
         scopename, _, filter_ = scope.partition('!')
         if scopename not in allowed_scopes:
@@ -762,9 +734,7 @@ def _check_token_scopes(scopes, owner, oauth_client):
         owner_scopes,
         db=sa.inspect(owner).session,
     )
-    excess_scopes = token_scopes - intersection
-
-    if excess_scopes:
+    if excess_scopes := token_scopes - intersection:
         raise ValueError(
             f"Not assigning requested scopes {','.join(excess_scopes)} not held by {owner.__class__.__name__} {owner.name}"
         )
@@ -855,7 +825,7 @@ def needs_scope(*scopes):
 
             s_kwargs = {}
             for resource in {'user', 'server', 'group', 'service'}:
-                resource_name = resource + '_name'
+                resource_name = f'{resource}_name'
                 if resource_name in bound_sig.arguments:
                     resource_value = bound_sig.arguments[resource_name]
                     s_kwargs[resource] = resource_value
@@ -886,10 +856,7 @@ def needs_scope(*scopes):
 
 
 def _identify_key(obj=None):
-    if obj is None:
-        return None
-    else:
-        return (type(obj).__name__, obj.name)
+    return None if obj is None else (type(obj).__name__, obj.name)
 
 
 @lru_cache_key(_identify_key)
@@ -924,17 +891,14 @@ def access_scopes(oauth_client):
     scopes = set()
     if oauth_client.identifier == "jupyterhub":
         return frozenset()
-    spawner = oauth_client.spawner
-    if spawner:
+    if spawner := oauth_client.spawner:
         scopes.add(f"access:servers!server={spawner.user.name}/{spawner.name}")
+    elif service := oauth_client.service:
+        scopes.add(f"access:services!service={service.name}")
     else:
-        service = oauth_client.service
-        if service:
-            scopes.add(f"access:services!service={service.name}")
-        else:
-            app_log.warning(
-                f"OAuth client {oauth_client} has no associated service or spawner!"
-            )
+        app_log.warning(
+            f"OAuth client {oauth_client} has no associated service or spawner!"
+        )
     return frozenset(scopes)
 
 
@@ -1037,7 +1001,7 @@ def describe_raw_scopes(raw_scopes, username=None):
                 filter_text = "only you"
             else:
                 kind_text = kind
-                if kind == 'group':
+                if kind_text == 'group':
                     kind_text = "users in group"
                 filter_text = f"{kind_text} {name}"
         descriptions.append(
@@ -1153,10 +1117,9 @@ def define_custom_scopes(scopes):
                         f"subscope {subscope} in {scope}={scope_definition} not found. All scopes must be defined."
                     )
 
-        extra_keys = set(scope_definition.keys()).difference(
+        if extra_keys := set(scope_definition.keys()).difference(
             ["description", "subscopes"]
-        )
-        if extra_keys:
+        ):
             warnings.warn(
                 f"Ignoring unrecognized key(s) {', '.join(extra_keys)!r} in {scope}={scope_definition}",
                 UserWarning,

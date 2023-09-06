@@ -57,14 +57,7 @@ class SelfAPIHandler(APIHandler):
 
         model = get_model(user)
 
-        # add session_id associated with token
-        # added in 2.0
-        token = self.get_token()
-        if token:
-            model["session_id"] = token.session_id
-        else:
-            model["session_id"] = None
-
+        model["session_id"] = token.session_id if (token := self.get_token()) else None
         # add scopes to identify model,
         # but not the scopes we added to ensure we could read our own model
         model["scopes"] = sorted(self.expanded_scopes.difference(_added_scopes))
@@ -157,8 +150,7 @@ class UserListAPIHandler(APIHandler):
         user_list = []
         for u in query:
             if post_filter is None or post_filter(u):
-                user_model = self.user_model(u)
-                if user_model:
+                if user_model := self.user_model(u):
                     user_list.append(user_model)
 
         total_count = full_query.count()
@@ -195,15 +187,15 @@ class UserListAPIHandler(APIHandler):
                 continue
             user = self.find_user(name)
             if user is not None:
-                self.log.warning("User %s already exists" % name)
+                self.log.warning(f"User {name} already exists")
             else:
                 to_create.append(name)
 
         if invalid_names:
             if len(invalid_names) == 1:
-                msg = "Invalid username: %s" % invalid_names[0]
+                msg = f"Invalid username: {invalid_names[0]}"
             else:
-                msg = "Invalid usernames: %s" % ', '.join(invalid_names)
+                msg = f"Invalid usernames: {', '.join(invalid_names)}"
             raise web.HTTPError(400, msg)
 
         if not to_create:
@@ -219,7 +211,7 @@ class UserListAPIHandler(APIHandler):
             try:
                 await maybe_future(self.authenticator.add_user(user))
             except Exception as e:
-                self.log.error("Failed to create user: %s" % name, exc_info=True)
+                self.log.error(f"Failed to create user: {name}", exc_info=True)
                 self.users.delete(user)
                 raise web.HTTPError(400, f"Failed to create user {name}: {e}")
             else:
@@ -256,7 +248,7 @@ class UserAPIHandler(APIHandler):
         data = self.get_json_body()
         user = self.find_user(user_name)
         if user is not None:
-            raise web.HTTPError(409, "User %s already exists" % user_name)
+            raise web.HTTPError(409, f"User {user_name} already exists")
 
         user = self.user_from_username(user_name)
         if data:
@@ -269,10 +261,10 @@ class UserAPIHandler(APIHandler):
         try:
             await maybe_future(self.authenticator.add_user(user))
         except Exception:
-            self.log.error("Failed to create user: %s" % user_name, exc_info=True)
+            self.log.error(f"Failed to create user: {user_name}", exc_info=True)
             # remove from registry
             self.users.delete(user)
-            raise web.HTTPError(400, "Failed to create user: %s" % user_name)
+            raise web.HTTPError(400, f"Failed to create user: {user_name}")
 
         self.write(json.dumps(self.user_model(user)))
         self.set_status(201)
@@ -287,15 +279,14 @@ class UserAPIHandler(APIHandler):
         if user.spawner._stop_pending:
             raise web.HTTPError(
                 400,
-                "%s's server is in the process of stopping, please wait." % user_name,
+                f"{user_name}'s server is in the process of stopping, please wait.",
             )
         if user.running:
             await self.stop_single_user(user)
             if user.spawner._stop_pending:
                 raise web.HTTPError(
                     400,
-                    "%s's server is in the process of stopping, please wait."
-                    % user_name,
+                    f"{user_name}'s server is in the process of stopping, please wait.",
                 )
 
         await maybe_future(self.authenticator.delete_user(user))
@@ -319,7 +310,7 @@ class UserAPIHandler(APIHandler):
             if self.find_user(data['name']):
                 raise web.HTTPError(
                     400,
-                    "User %s already exists, username must be unique" % data['name'],
+                    f"User {data['name']} already exists, username must be unique",
                 )
         for key, value in data.items():
             if key == 'auth_state':
@@ -342,7 +333,7 @@ class UserTokenListAPIHandler(APIHandler):
         """Get tokens for a given user"""
         user = self.find_user(user_name)
         if not user:
-            raise web.HTTPError(404, "No such user: %s" % user_name)
+            raise web.HTTPError(404, f"No such user: {user_name}")
 
         now = datetime.utcnow()
         api_tokens = []
@@ -462,7 +453,7 @@ class UserTokenAPIHandler(APIHandler):
         """"""
         user = self.find_user(user_name)
         if not user:
-            raise web.HTTPError(404, "No such user: %s" % user_name)
+            raise web.HTTPError(404, f"No such user: {user_name}")
         token = self.find_token_by_id(user, token_id)
         self.write(json.dumps(self.token_model(token)))
 
@@ -471,7 +462,7 @@ class UserTokenAPIHandler(APIHandler):
         """Delete a token"""
         user = self.find_user(user_name)
         if not user:
-            raise web.HTTPError(404, "No such user: %s" % user_name)
+            raise web.HTTPError(404, f"No such user: {user_name}")
         token = self.find_token_by_id(user, token_id)
         # deleting an oauth token deletes *all* oauth tokens for that client
         client_id = token.client_id
@@ -512,10 +503,7 @@ class UserServerAPIHandler(APIHandler):
                 if named_server_limit_per_user <= len(named_spawners):
                     raise web.HTTPError(
                         400,
-                        "User {} already has the maximum of {} named servers."
-                        "  One must be deleted before a new server can be created".format(
-                            user_name, named_server_limit_per_user
-                        ),
+                        f"User {user_name} already has the maximum of {named_server_limit_per_user} named servers.  One must be deleted before a new server can be created",
                     )
         spawner = user.get_spawner(server_name, replace_failed=True)
         pending = spawner.pending
@@ -535,7 +523,7 @@ class UserServerAPIHandler(APIHandler):
             finally:
                 spawner._spawn_pending = False
             if state is None:
-                raise web.HTTPError(400, "%s is already running" % spawner._log_name)
+                raise web.HTTPError(400, f"{spawner._log_name} is already running")
 
         options = self.get_json_body()
         await self.spawn_single_user(user, server_name, options=options)
@@ -715,18 +703,16 @@ class SpawnProgressAPIHandler(APIHandler):
             # not pending, no progress to fetch
             # check if spawner has just failed
             f = spawn_future
-            if f and f.done() and f.exception():
-                exc = f.exception()
-                message = getattr(exc, "jupyterhub_message", str(exc))
-                failed_event['message'] = f"Spawn failed: {message}"
-                html_message = getattr(exc, "jupyterhub_html_message", "")
-                if html_message:
-                    failed_event['html_message'] = html_message
-                await self.send_event(failed_event)
-                return
-            else:
+            if not f or not f.done() or not f.exception():
                 raise web.HTTPError(400, "%s is not starting...", spawner._log_name)
 
+            exc = f.exception()
+            message = getattr(exc, "jupyterhub_message", str(exc))
+            failed_event['message'] = f"Spawn failed: {message}"
+            if html_message := getattr(exc, "jupyterhub_html_message", ""):
+                failed_event['html_message'] = html_message
+            await self.send_event(failed_event)
+            return
         # retrieve progress events from the Spawner
         async with aclosing(
             iterate_until(spawn_future, spawner._generate_progress())
@@ -757,8 +743,7 @@ class SpawnProgressAPIHandler(APIHandler):
                 exc = f.exception()
                 message = getattr(exc, "jupyterhub_message", str(exc))
                 failed_event['message'] = f"Spawn failed: {message}"
-                html_message = getattr(exc, "jupyterhub_html_message", "")
-                if html_message:
+                if html_message := getattr(exc, "jupyterhub_html_message", ""):
                     failed_event['html_message'] = html_message
             else:
                 self.log.warning(
@@ -786,9 +771,7 @@ def _parse_timestamp(timestamp):
     if (dt - now) > timedelta(minutes=59):
         raise web.HTTPError(
             400,
-            "Rejecting activity from more than an hour in the future: {}".format(
-                isoformat(dt)
-            ),
+            f"Rejecting activity from more than an hour in the future: {isoformat(dt)}",
         )
     return dt
 

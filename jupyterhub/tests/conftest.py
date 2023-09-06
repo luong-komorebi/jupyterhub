@@ -64,7 +64,7 @@ def app(request, io_loop, ssl_tmpdir):
     ssl_enabled = getattr(
         request.module, 'ssl_enabled', os.environ.get('SSL_ENABLED', False)
     )
-    kwargs = dict()
+    kwargs = {}
     if ssl_enabled:
         kwargs.update(dict(internal_ssl=True, internal_certs_location=str(ssl_tmpdir)))
 
@@ -81,7 +81,7 @@ def app(request, io_loop, ssl_tmpdir):
         try:
             mocked_app.stop()
         except Exception as e:
-            print("Error stopping Hub: %s" % e, file=sys.stderr)
+            print(f"Error stopping Hub: {e}", file=sys.stderr)
 
     request.addfinalizer(fin)
     io_loop.run_sync(make_app)
@@ -204,15 +204,13 @@ def user(app):
 
     Each time the fixture is used, a new user is created
     """
-    user = add_user(app.db, app, name=new_username())
-    yield user
+    yield add_user(app.db, app, name=new_username())
 
 
 @fixture
 def admin_user(app, username):
     """Fixture for creating a temporary admin user"""
-    user = add_user(app.db, app, name=new_username('testadmin'), admin=True)
-    yield user
+    yield add_user(app.db, app, name=new_username('testadmin'), admin=True)
 
 
 _groupname_counter = 0

@@ -50,10 +50,9 @@ def ssl_setup(cert_dir, authority_name):
     certipy = Certipy(store_dir=cert_dir)
     alt_names = ["DNS:localhost", "IP:127.0.0.1"]
     internal_authority = certipy.create_ca(authority_name, overwrite=True)
-    external_certs = certipy.create_signed_pair(
+    return certipy.create_signed_pair(
         "external", authority_name, overwrite=True, alt_names=alt_names
     )
-    return external_certs
 
 
 """Skip tests that don't work under internal-ssl when testing under internal-ssl"""
@@ -96,9 +95,8 @@ def check_db_locks(func):
 
         if inspect.isawaitable(maybe_future):
             return await_then_check()
-        else:
-            _check()
-            return maybe_future
+        _check()
+        return maybe_future
 
     return new_func
 
@@ -106,10 +104,7 @@ def check_db_locks(func):
 def find_user(db, name, app=None):
     """Find user in database."""
     orm_user = db.query(orm.User).filter(orm.User.name == name).first()
-    if app is None:
-        return orm_user
-    else:
-        return app.users[orm_user.id]
+    return orm_user if app is None else app.users[orm_user.id]
 
 
 def add_user(db, app=None, **kwargs):
@@ -123,15 +118,11 @@ def add_user(db, app=None, **kwargs):
         for attr, value in kwargs.items():
             setattr(orm_user, attr, value)
     db.commit()
-    requested_roles = kwargs.get('roles')
-    if requested_roles:
+    if requested_roles := kwargs.get('roles'):
         update_roles(db, entity=orm_user, roles=requested_roles)
     else:
         assign_default_roles(db, entity=orm_user)
-    if app:
-        return app.users[orm_user.id]
-    else:
-        return orm_user
+    return app.users[orm_user.id] if app else orm_user
 
 
 def auth_header(db, name):
@@ -140,7 +131,7 @@ def auth_header(db, name):
     if user is None:
         raise KeyError(f"No such user: {name}")
     token = user.new_api_token()
-    return {'Authorization': 'token %s' % token}
+    return {'Authorization': f'token {token}'}
 
 
 @check_db_locks
@@ -148,17 +139,12 @@ async def api_request(
     app, *api_path, method='get', noauth=False, bypass_proxy=False, **kwargs
 ):
     """Make an API request"""
-    if bypass_proxy:
-        # make a direct request to the hub,
-        # skipping the proxy
-        base_url = app.hub.url
-    else:
-        base_url = public_url(app, path='hub')
+    base_url = app.hub.url if bypass_proxy else public_url(app, path='hub')
     headers = kwargs.setdefault('headers', {})
     if 'Authorization' not in headers and not noauth and 'cookies' not in kwargs:
         # make a copy to avoid modifying arg in-place
         kwargs['headers'] = h = {}
-        h.update(headers)
+        h |= headers
         h.update(auth_header(app.db, kwargs.pop('name', 'admin')))
 
     if 'cookies' in kwargs:
@@ -189,10 +175,7 @@ def get_page(path, app, hub=True, **kw):
         raise ValueError(
             "Not a hub page path: %r. Did you mean async_requests.get?" % path
         )
-    if hub:
-        prefix = app.hub.base_url
-    else:
-        prefix = app.base_url
+    prefix = app.hub.base_url if hub else app.base_url
     base_url = ujoin(public_host(app), prefix)
     return async_requests.get(ujoin(base_url, path), **kw)
 
@@ -208,15 +191,9 @@ def public_host(app):
 def public_url(app, user_or_service=None, path=''):
     """Return the full, public base URL (including prefix) of the given JupyterHub instance."""
     if user_or_service:
-        if app.subdomain_host:
-            host = user_or_service.host
-        else:
-            host = public_host(app)
+        host = user_or_service.host if app.subdomain_host else public_host(app)
         prefix = user_or_service.prefix
     else:
         host = public_host(app)
         prefix = Server.from_url(app.proxy.public_url).base_url
-    if path:
-        return host + ujoin(prefix, path)
-    else:
-        return host + prefix
+    return host + ujoin(prefix, path) if path else host + prefix

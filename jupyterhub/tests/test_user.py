@@ -10,11 +10,7 @@ async def test_userdict_get(db, attr):
     u = add_user(db, name="rey", app=False)
     userdict = UserDict(db_factory=lambda: db, settings={})
 
-    if attr == "self":
-        key = u
-    else:
-        key = getattr(u, attr)
-
+    key = u if attr == "self" else getattr(u, attr)
     # `in` checks cache only
     assert key not in userdict
     assert userdict.get(key)

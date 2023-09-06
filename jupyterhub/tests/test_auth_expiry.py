@@ -105,13 +105,13 @@ async def test_auth_expired_api(app, user, disable_refresh):
     before = user._auth_refreshed
 
     # auth is fresh, doesn't trigger expiry
-    r = await api_request(app, 'users/' + user.name, name=user.name)
+    r = await api_request(app, f'users/{user.name}', name=user.name)
     assert user._auth_refreshed == before
     assert r.status_code == 200
 
     # get a page with stale auth, triggers expiry
     user._auth_refreshed -= app.authenticator.auth_refresh_age
-    r = await api_request(app, 'users/' + user.name, name=user.name)
+    r = await api_request(app, f'users/{user.name}', name=user.name)
     # api requests can't do login redirects
     assert r.status_code == 403
 

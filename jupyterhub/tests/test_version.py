@@ -35,7 +35,7 @@ def test_check_version_singleton(caplog):
     """Tests that minor version difference logging is only logged once."""
     # Run test_check_version twice which will assert that the warning is only logged
     # once.
-    for x in range(2):
+    for _ in range(2):
         test_check_version(
             '1.2.0',
             '1.1.0',

@@ -329,7 +329,7 @@ async def test_creating_roles(app, role, role_def, response_type, response):
         with pytest.raises(response):
             roles.create_role(db, role_def)
 
-    elif response_type == 'warning' or response_type == 'info':
+    elif response_type in ['warning', 'info']:
         with pytest.warns(response):
             roles.create_role(db, role_def)
         # check the role has been created/modified
@@ -340,7 +340,6 @@ async def test_creating_roles(app, role, role_def, response_type, response):
         if 'scopes' in role_def.keys():
             assert role.scopes == role_def['scopes']
 
-    # make sure no warnings/info logged when the role exists and its definition hasn't been changed
     elif response_type == 'no-log':
         with pytest.warns(response) as record:
             roles.create_role(db, role_def)
@@ -701,10 +700,7 @@ async def test_get_new_token_via_api(app, headers, rolename, scopes, status):
                 group.roles.append(group_role)
                 user.groups.append(group)
                 app.db.commit()
-    if rolename:
-        body = json.dumps({'roles': [rolename]})
-    else:
-        body = ''
+    body = json.dumps({'roles': [rolename]}) if rolename else ''
     # request a new token
     r = await api_request(
         app, 'users/user/tokens', method='post', headers=headers, data=body
@@ -872,11 +868,7 @@ async def test_server_role_api_calls(
     else:
         api_token = user.new_api_token(roles=[token_role])
 
-    if for_user == 'same_user':
-        username = user.name
-    else:
-        username = 'otheruser'
-
+    username = user.name if for_user == 'same_user' else 'otheruser'
     if api_endpoint == 'activity':
         path = f"users/{username}/activity"
         data = json.dumps({"servers": {"": {"last_activity": utcnow().isoformat()}}})
@@ -935,7 +927,7 @@ async def test_user_group_roles(app, create_temp_role):
     # repeat check to ensure group roles don't get added to the user at all
     # regression test for #3472
     roles_before = list(user.roles)
-    for i in range(3):
+    for _ in range(3):
         get_scopes_for(user.orm_user)
         user_roles = list(user.roles)
         assert user_roles == roles_before
@@ -943,7 +935,7 @@ async def test_user_group_roles(app, create_temp_role):
     # jack's API token
     token = user.new_api_token()
 
-    headers = {'Authorization': 'token %s' % token}
+    headers = {'Authorization': f'token {token}'}
     r = await api_request(app, f'users/{user.name}', method='get', headers=headers)
     assert r.status_code == 200
     r.raise_for_status()
@@ -955,7 +947,7 @@ async def test_user_group_roles(app, create_temp_role):
     assert len(reply['roles']) == 1
     assert group_role.name not in reply['roles']
 
-    headers = {'Authorization': 'token %s' % token}
+    headers = {'Authorization': f'token {token}'}
     r = await api_request(app, 'groups', method='get', headers=headers)
     assert r.status_code == 200
     r.raise_for_status()
@@ -965,7 +957,7 @@ async def test_user_group_roles(app, create_temp_role):
     assert len(reply) == 1
     assert reply[0]['name'] == 'A'
 
-    headers = {'Authorization': 'token %s' % token}
+    headers = {'Authorization': f'token {token}'}
     r = await api_request(app, f'users/{user.name}', method='get', headers=headers)
     assert r.status_code == 200
     r.raise_for_status()

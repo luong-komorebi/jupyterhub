@@ -23,9 +23,7 @@ from ..utils import compare_token, hash_token
 
 
 def is_absolute_uri(uri):
-    if uri.startswith('/'):
-        return True
-    return uri_validate.is_absolute_uri(uri)
+    return True if uri.startswith('/') else uri_validate.is_absolute_uri(uri)
 
 
 authorization_code.is_absolute_uri = is_absolute_uri
@@ -120,9 +118,8 @@ class JupyterHubRequestValidator(RequestValidator):
         )
         if redirect_uri == client.redirect_uri:
             return True
-        else:
-            app_log.warning("Redirect uri %s != %s", redirect_uri, client.redirect_uri)
-            return False
+        app_log.warning("Redirect uri %s != %s", redirect_uri, client.redirect_uri)
+        return False
 
     def get_default_redirect_uri(self, client_id, request, *args, **kwargs):
         """Get the default redirect URI for the client.
@@ -155,7 +152,7 @@ class JupyterHubRequestValidator(RequestValidator):
             self.db.query(orm.OAuthClient).filter_by(identifier=client_id).first()
         )
         if orm_client is None:
-            raise ValueError("No such client: %s" % client_id)
+            raise ValueError(f"No such client: {client_id}")
         scopes = set(orm_client.allowed_scopes)
         if 'inherit' not in scopes:
             # add identify-user scope
@@ -215,7 +212,7 @@ class JupyterHubRequestValidator(RequestValidator):
         Method is used by:
             - Revocation Endpoint
         """
-        app_log.debug("Revoking %s %s", token_type_hint, token[:3] + '...')
+        app_log.debug("Revoking %s %s", token_type_hint, f'{token[:3]}...')
         raise NotImplementedError('Subclasses must implement this method.')
 
     def save_authorization_code(self, client_id, code, request, *args, **kwargs):
@@ -254,7 +251,7 @@ class JupyterHubRequestValidator(RequestValidator):
             self.db.query(orm.OAuthClient).filter_by(identifier=client_id).first()
         )
         if orm_client is None:
-            raise ValueError("No such client: %s" % client_id)
+            raise ValueError(f"No such client: {client_id}")
 
         orm_code = orm.OAuthCode(
             client=orm_client,
@@ -334,7 +331,7 @@ class JupyterHubRequestValidator(RequestValidator):
             - Client Credentials grant
         """
         log_token = {}
-        log_token.update(token)
+        log_token |= token
         # redact sensitive keys in log
         for key in ('access_token', 'refresh_token', 'state'):
             if key in token:
@@ -344,7 +341,7 @@ class JupyterHubRequestValidator(RequestValidator):
         app_log.debug("Saving bearer token %s", log_token)
 
         if request.user is None:
-            raise ValueError("No user for access token: %s" % request.user)
+            raise ValueError(f"No user for access token: {request.user}")
         client = (
             self.db.query(orm.OAuthClient)
             .filter_by(identifier=request.client.client_id)
@@ -505,11 +502,10 @@ class JupyterHubRequestValidator(RequestValidator):
             return False
         if redirect_uri == orm_client.redirect_uri:
             return True
-        else:
-            app_log.warning(
-                "Redirect uri %s != %s", redirect_uri, orm_client.redirect_uri
-            )
-            return False
+        app_log.warning(
+            "Redirect uri %s != %s", redirect_uri, orm_client.redirect_uri
+        )
+        return False
 
     def validate_refresh_token(self, refresh_token, client, request, *args, **kwargs):
         """Ensure the Bearer token is valid and authorized access to scopes.
@@ -525,7 +521,6 @@ class JupyterHubRequestValidator(RequestValidator):
             - Refresh Token Grant
         """
         return False
-        raise NotImplementedError('Subclasses must implement this method.')
 
     def validate_response_type(
         self, client_id, response_type, client, request, *args, **kwargs
@@ -659,7 +654,7 @@ class JupyterHubOAuthServer(WebApplicationServer):
             app_log.info(f'Creating oauth client {client_id}')
         else:
             app_log.info(f'Updating oauth client {client_id}')
-        if allowed_scopes == None:
+        if allowed_scopes is None:
             allowed_scopes = []
         orm_client.secret = hash_token(client_secret) if client_secret else ""
         orm_client.redirect_uri = redirect_uri
@@ -679,5 +674,4 @@ def make_provider(session_factory, url_prefix, login_url, **oauth_server_kwargs)
     """Make an OAuth provider"""
     db = session_factory()
     validator = JupyterHubRequestValidator(db)
-    server = JupyterHubOAuthServer(db, validator, **oauth_server_kwargs)
-    return server
+    return JupyterHubOAuthServer(db, validator, **oauth_server_kwargs)

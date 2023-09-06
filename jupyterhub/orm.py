@@ -181,12 +181,7 @@ class Role(Base):
     groups = relationship('Group', secondary='group_role_map', backref='roles')
 
     def __repr__(self):
-        return "<{} {} ({}) - scopes: {}>".format(
-            self.__class__.__name__,
-            self.name,
-            self.description,
-            self.scopes,
-        )
+        return f"<{self.__class__.__name__} {self.name} ({self.description}) - scopes: {self.scopes}>"
 
     @classmethod
     def find(cls, db, name):
@@ -437,13 +432,12 @@ class Expiring:
 
         or None
         """
-        if self.expires_at:
-            delta = self.expires_at - self.now()
-            if isinstance(delta, timedelta):
-                delta = delta.total_seconds()
-            return delta
-        else:
+        if not self.expires_at:
             return None
+        delta = self.expires_at - self.now()
+        if isinstance(delta, timedelta):
+            delta = delta.total_seconds()
+        return delta
 
     @classmethod
     def purge_expired(cls, db):
@@ -508,9 +502,8 @@ class Hashed(Expiring):
                 "Tokens must be at least %i characters, got %r"
                 % (cls.min_length, token)
             )
-        found = cls.find(db, token)
-        if found:
-            raise ValueError("Collision on token: %s..." % token[: cls.prefix_length])
+        if found := cls.find(db, token):
+            raise ValueError(f"Collision on token: {token[:cls.prefix_length]}...")
 
     @classmethod
     def find_prefix(cls, db, token):
@@ -527,7 +520,7 @@ class Hashed(Expiring):
         # so we aren't comparing with all tokens
         prefix_match = db.query(cls).filter_by(prefix=prefix)
         prefix_match = prefix_match.filter(
-            or_(cls.expires_at == None, cls.expires_at >= cls.now())
+            or_(cls.expires_at is None, cls.expires_at >= cls.now())
         )
         return prefix_match
 
@@ -683,7 +676,7 @@ class APIToken(Hashed, Base):
     ):
         """Generate a new API token for a user or service"""
         assert user or service
-        assert not (user and service)
+        assert not user or not service
         db = inspect(user or service).session
         if token is None:
             token = new_token()
@@ -702,13 +695,10 @@ class APIToken(Hashed, Base):
             )
 
         elif scopes is None and roles is None:
-            # this is the default branch
-            # use the default 'token' role to specify default permissions for API tokens
-            default_token_role = Role.find(db, 'token')
-            if not default_token_role:
-                scopes = ["inherit"]
-            else:
+            if default_token_role := Role.find(db, 'token'):
                 scopes = roles_to_scopes([default_token_role])
+            else:
+                scopes = ["inherit"]
         elif roles is not None:
             # evaluate roles to scopes immediately
             # TODO: should this be deprecated, or not?
@@ -1016,13 +1006,10 @@ def mysql_large_prefix_check(engine):
             'variable_name like "innodb_file_format";'
         ).fetchall()
     )
-    if (
+    return (
         variables.get('innodb_file_format', 'Barracuda') == 'Barracuda'
         and variables.get('innodb_large_prefix', 'ON') == 'ON'
-    ):
-        return True
-    else:
-        return False
+    )
 
 
 def add_row_format(base):
@@ -1062,12 +1049,7 @@ def new_session_factory(
 
     Base.metadata.create_all(engine)
 
-    # We set expire_on_commit=False, since we don't actually need
-    # SQLAlchemy to expire objects after committing - we don't expect
-    # concurrent runs of the hub talking to the same db. Turning
-    # this off gives us a major performance boost
-    session_factory = sessionmaker(bind=engine, expire_on_commit=expire_on_commit)
-    return session_factory
+    return sessionmaker(bind=engine, expire_on_commit=expire_on_commit)
 
 
 def get_class(resource_name):

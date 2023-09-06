@@ -257,8 +257,7 @@ class MockHub(JupyterHub):
     @default('port')
     def _port_default(self):
         if self.subdomain_host:
-            port = urlparse(self.subdomain_host).port
-            if port:
+            if port := urlparse(self.subdomain_host).port:
                 return port
         return random_port()
 
@@ -351,11 +350,9 @@ class MockHub(JupyterHub):
     async def login_user(self, name):
         """Login a user by name, returning her cookies."""
         base_url = public_url(self)
-        external_ca = None
-        if self.internal_ssl:
-            external_ca = self.external_certs['files']['ca']
+        external_ca = self.external_certs['files']['ca'] if self.internal_ssl else None
         r = await async_requests.post(
-            base_url + 'hub/login',
+            f'{base_url}hub/login',
             data={'username': name, 'password': name},
             allow_redirects=False,
             verify=external_ca,
@@ -433,7 +430,4 @@ class StubSingleUserSpawner(MockSpawner):
     async def poll(self):
         if self._thread is None:
             return 0
-        if self._thread.is_alive():
-            return None
-        else:
-            return 0
+        return None if self._thread.is_alive() else 0

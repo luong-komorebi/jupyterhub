@@ -18,9 +18,9 @@ class URLPrefix(Unicode):
     def validate(self, obj, value):
         u = super().validate(obj, value)
         if not u.startswith('/'):
-            u = '/' + u
+            u = f'/{u}'
         if not u.endswith('/'):
-            u = u + '/'
+            u = f'{u}/'
         return u
 
 
@@ -34,7 +34,7 @@ class Command(List):
         if isinstance(default_value, str):
             default_value = [default_value]
         if default_value is not Undefined and (
-            not (default_value is None and not kwargs.get("allow_none", False))
+            default_value is not None or kwargs.get("allow_none", False)
         ):
             kwargs["default_value"] = default_value
         super().__init__(Unicode(), **kwargs)
@@ -93,7 +93,7 @@ class ByteSpecification(Integer):
                 )
             )
         else:
-            return int(float(num) * self.UNIT_SUFFIXES[suffix])
+            return int(num * self.UNIT_SUFFIXES[suffix])
 
 
 class Callable(TraitType):
@@ -129,10 +129,11 @@ class EntryPointType(Type):
     @property
     def help(self):
         """Extend help by listing currently installed choices"""
-        chunks = [self._original_help]
-        chunks.append("Currently installed: ")
-        for key, entry_point in self.load_entry_points().items():
-            chunks.append(f"  - {key}: {entry_point.module}.{entry_point.attr}")
+        chunks = [self._original_help, "Currently installed: "]
+        chunks.extend(
+            f"  - {key}: {entry_point.module}.{entry_point.attr}"
+            for key, entry_point in self.load_entry_points().items()
+        )
         return '\n'.join(chunks)
 
     @help.setter

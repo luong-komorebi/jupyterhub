@@ -19,7 +19,7 @@ def get_default_roles():
         'scopes': list of scopes,
       }
     """
-    default_roles = [
+    return [
         {
             'name': 'user',
             'description': 'Standard user privileges',
@@ -61,7 +61,6 @@ def get_default_roles():
             'scopes': ['inherit'],
         },
     ]
-    return default_roles
 
 
 def get_roles_for(orm_object):
@@ -137,10 +136,9 @@ def create_role(db, role_dict):
 
     if 'name' not in role_dict.keys():
         raise KeyError('Role definition must have a name')
-    else:
-        name = role_dict['name']
-        _validate_role_name(name)
-        role = orm.Role.find(db, name)
+    name = role_dict['name']
+    _validate_role_name(name)
+    role = orm.Role.find(db, name)
 
     description = role_dict.get('description')
     scopes = role_dict.get('scopes')
@@ -198,8 +196,7 @@ def delete_role(db, rolename):
     if any(role['name'] == rolename for role in default_roles):
         raise ValueError('Default role %r cannot be removed', rolename)
 
-    role = orm.Role.find(db, rolename)
-    if role:
+    if role := orm.Role.find(db, rolename):
         db.delete(role)
         db.commit()
         app_log.info('Role %s has been deleted', rolename)
@@ -228,11 +225,7 @@ def _existing_only(func):
 @_existing_only
 def grant_role(db, entity, role):
     """Adds a role for users, services, groups or tokens"""
-    if isinstance(entity, orm.APIToken):
-        entity_repr = entity
-    else:
-        entity_repr = entity.name
-
+    entity_repr = entity if isinstance(entity, orm.APIToken) else entity.name
     if role not in entity.roles:
         entity.roles.append(role)
         app_log.info(
@@ -247,10 +240,7 @@ def grant_role(db, entity, role):
 @_existing_only
 def strip_role(db, entity, role):
     """Removes a role for users, services, groups or tokens"""
-    if isinstance(entity, orm.APIToken):
-        entity_repr = entity
-    else:
-        entity_repr = entity.name
+    entity_repr = entity if isinstance(entity, orm.APIToken) else entity.name
     if role in entity.roles:
         entity.roles.remove(role)
         db.commit()
@@ -303,9 +293,7 @@ def check_for_default_roles(db, bearer):
     Groups can be without a role
     """
     Class = orm.get_class(bearer)
-    if Class in {orm.Group, orm.Service}:
-        pass
-    else:
+    if Class not in {orm.Group, orm.Service}:
         for obj in (
             db.query(Class)
             .outerjoin(orm.Role, Class.roles)

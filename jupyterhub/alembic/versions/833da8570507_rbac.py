@@ -21,14 +21,14 @@ naming_convention = orm.meta.naming_convention
 
 
 def upgrade():
+    column_name = "oauth_client_id"
+    target_table = "oauth_clients"
+    target_column = "identifier"
     # associate spawners and services with their oauth clients
     # op.add_column(
     #     'services', sa.Column('oauth_client_id', sa.Unicode(length=255), nullable=True)
     # )
     for table_name in ('services', 'spawners'):
-        column_name = "oauth_client_id"
-        target_table = "oauth_clients"
-        target_column = "identifier"
         with op.batch_alter_table(
             table_name,
             schema=None,
@@ -66,11 +66,11 @@ def upgrade():
 
 
 def downgrade():
-    for table_name in ('services', 'spawners'):
-        column_name = "oauth_client_id"
-        target_table = "oauth_clients"
-        target_column = "identifier"
+    column_name = "oauth_client_id"
+    target_table = "oauth_clients"
+    target_column = "identifier"
 
+    for table_name in ('services', 'spawners'):
         with op.batch_alter_table(
             table_name,
             schema=None,

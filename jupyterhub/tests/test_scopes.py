@@ -130,8 +130,7 @@ class MockAPIHandler:
 
 @pytest.fixture
 def mock_handler():
-    obj = MockAPIHandler()
-    return obj
+    return MockAPIHandler()
 
 
 @mark.parametrize(
@@ -295,7 +294,7 @@ async def test_exceeding_user_permissions(
     orm_api_token = orm.APIToken.find(app.db, token=api_token)
     # store scopes user does not have
     orm_api_token.scopes = orm_api_token.scopes + ['list:users', 'read:users']
-    headers = {'Authorization': 'token %s' % api_token}
+    headers = {'Authorization': f'token {api_token}'}
     r = await api_request(app, 'users', headers=headers)
     assert r.status_code == 200
     keys = {key for user in r.json() for key in user.keys()}
@@ -313,7 +312,7 @@ async def test_user_service_separation(app, mockservice_url, create_temp_role):
     roles.update_roles(app.db, mockservice_url.orm, roles=['reader_role'])
     user.roles.remove(orm.Role.find(app.db, name='user'))
     api_token = user.new_api_token()
-    headers = {'Authorization': 'token %s' % api_token}
+    headers = {'Authorization': f'token {api_token}'}
     r = await api_request(app, 'users', headers=headers)
     assert r.status_code == 200
     keys = {key for user in r.json() for key in user.keys()}
@@ -539,9 +538,9 @@ async def test_server_state_access(
     keys_out,
 ):
     with mock.patch.dict(
-        app.tornado_settings,
-        {'allow_named_servers': True, 'named_server_limit_per_user': 2},
-    ):
+            app.tornado_settings,
+            {'allow_named_servers': True, 'named_server_limit_per_user': 2},
+        ):
         user = create_user_with_scopes('self', name='almond')
         group_name = 'nuts'
         group = orm.Group.find(app.db, name=group_name)
@@ -557,7 +556,7 @@ async def test_server_state_access(
             )
         service = create_service_with_scopes("read:users:name!user=", *scopes)
         api_token = service.new_api_token()
-        headers = {'Authorization': 'token %s' % api_token}
+        headers = {'Authorization': f'token {api_token}'}
 
         # can I get the user model?
         r = await api_request(app, 'users', user.name, headers=headers)

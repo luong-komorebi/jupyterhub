@@ -112,7 +112,7 @@ async def test_external_proxy(request):
 
     routes = await app.proxy.get_all_routes()
 
-    assert list(routes.keys()) == []
+    assert not list(routes.keys())
 
     # poke the server to update the proxy
     r = await api_request(app, 'proxy', method='post', bypass_proxy=True)
@@ -169,7 +169,7 @@ async def test_external_proxy(request):
 async def test_check_routes(app, username, disable_check_routes):
     proxy = app.proxy
     test_user = add_user(app.db, app, name=username)
-    r = await api_request(app, 'users/%s/server' % username, method='post')
+    r = await api_request(app, f'users/{username}/server', method='post')
     r.raise_for_status()
 
     # check a valid route exists for user
@@ -211,12 +211,12 @@ async def test_extra_routes(app, routespec):
     # provide routespecs that have a domain in them.
     # We don't explicitly validate that here.
     if app.subdomain_host and routespec.startswith("/"):
-        routespec = 'example.com/' + routespec
+        routespec = f'example.com/{routespec}'
     elif not app.subdomain_host and not routespec.startswith("/"):
         pytest.skip("requires subdomains")
     validated_routespec = routespec
     if not routespec.endswith("/"):
-        validated_routespec = routespec + "/"
+        validated_routespec = f"{routespec}/"
     target = 'http://localhost:9999/test'
     proxy.extra_routes = {routespec: target}
 
@@ -246,11 +246,7 @@ def test_extra_routes_validate_routespec(
 ):
     save_host = app.subdomain_host
     request.addfinalizer(lambda: setattr(app, "subdomain_host", save_host))
-    if needs_subdomain:
-        app.subdomain_host = "localhost.jovyan.org"
-    else:
-        app.subdomain_host = ""
-
+    app.subdomain_host = "localhost.jovyan.org" if needs_subdomain else ""
     proxy = app.proxy
 
     extra_routes = {routespec: "https://127.0.0.1"}
@@ -300,7 +296,7 @@ def test_extra_routes_validate_target(app, target, expected):
 async def test_add_get_delete(app, routespec, disable_check_routes):
     arg = routespec
     if not routespec.endswith('/'):
-        routespec = routespec + '/'
+        routespec = f'{routespec}/'
 
     # host-routes when not host-routing raises an error
     # and vice versa

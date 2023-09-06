@@ -25,8 +25,7 @@ class ShutdownAPIHandler(APIHandler):
 
         app = JupyterHub.instance()
 
-        data = self.get_json_body()
-        if data:
+        if data := self.get_json_body():
             if 'proxy' in data:
                 proxy = data['proxy']
                 if proxy not in {True, False}:
